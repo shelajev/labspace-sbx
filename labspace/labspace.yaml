@@ -11,13 +11,13 @@ description: |
   guarantees yourself with real commands against real file paths.
 
 services:
-  - title: Term 1
-    id: term1
+  - title: Host
+    id: host
     url: http://localhost:8085
     icon: terminal
-  - title: Term 2
-    id: term2
-    url: http://localhost:8085
+  - title: Claude
+    id: claude
+    url: http://localhost:8086
     icon: terminal
 
 sections:

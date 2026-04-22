@@ -27,6 +27,17 @@ services:
         shell: zsh
         max-clients: 4
 
+  # Second ttyd on 8086 that drops learners straight into `sbx run claude .`.
+  # Paired with the "Claude" tab in labspace.yaml. Each browser connection
+  # spawns its own sbx run, so the learner's microVM stays scoped to the tab.
+  host-terminal-claude:
+    provider:
+      type: ./providers/sbx-ttyd
+      options:
+        port: 8086
+        shell: sbx run claude .
+        max-clients: 1
+
   interface:
     image: ajeetraina777/labspace-interface-sbx:latest
     pull_policy: always
@@ -34,3 +45,4 @@ services:
       WORKSPACE_TYPE: ttyd
     depends_on:
       - host-terminal
+      - host-terminal-claude
