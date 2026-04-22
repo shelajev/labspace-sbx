@@ -1,9 +1,12 @@
 services:
   configurator:
     environment:
-      PROJECT_CLONE_URL: https://github.com/ajeetraina/labspace-sbx
+      PROJECT_CLONE_URL: https://github.com/shelajev/labspace-sbx
 
-  # Dummy workspace - satisfies depends_on, Mac terminal owns port 8085
+  # Dummy workspace container. The base (labspace-content-dev) wires `workspace`
+  # into other services (e.g. host-republisher uses `network_mode: service:workspace`),
+  # so we can't replace it with a provider outright. We clear its ports so the
+  # host-side ttyd can bind 8085, and point its own internal ttyd at 8086 (unused).
   workspace:
     image: ajeetraina777/labspace-workspace-ttyd:latest
     pull_policy: always
@@ -12,8 +15,22 @@ services:
     environment:
       PORT: "8086"
 
+  # Host-side ttyd wrapping a host zsh, on port 8085. This is what the iframe
+  # actually loads — learners need a host shell to run sbx commands against
+  # their real machine (the microVM can't govern itself). Replaces the former
+  # start-labspace.sh shell script.
+  host-terminal:
+    provider:
+      type: ./providers/sbx-ttyd
+      options:
+        port: 8085
+        shell: zsh
+        max-clients: 4
+
   interface:
     image: ajeetraina777/labspace-interface-sbx:latest
     pull_policy: always
     environment:
       WORKSPACE_TYPE: ttyd
+    depends_on:
+      - host-terminal

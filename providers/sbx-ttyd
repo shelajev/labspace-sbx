@@ -1,0 +1,148 @@
+#!/usr/bin/env bash
+# Compose provider: host ttyd wrapping a host shell.
+#
+# Pairs with Docker Sandboxes (sbx) labspaces. ttyd runs on the host so that
+# learners can invoke sbx policy/run/exec commands from the browser iframe
+# against their actual host — the microVM stays untouched.
+#
+# Invoked by Compose as:
+#   sbx-ttyd compose --project-name <proj> up   [--port=N] [--shell=CMD] <service>
+#   sbx-ttyd compose --project-name <proj> down [--port=N] [--shell=CMD] <service>
+#   sbx-ttyd compose metadata
+#
+# Protocol: line-delimited JSON on stdout {"type":"info|debug|error|setenv","message":"..."}.
+
+set -euo pipefail
+
+json_escape() {
+  local s="$1"
+  s="${s//\\/\\\\}"
+  s="${s//\"/\\\"}"
+  s="${s//$'\n'/\\n}"
+  s="${s//$'\t'/\\t}"
+  printf '%s' "$s"
+}
+
+emit() {
+  printf '{"type":"%s","message":"%s"}\n' "$1" "$(json_escape "$2")"
+}
+
+die() {
+  emit error "$1"
+  exit 1
+}
+
+# ── Parse argv ────────────────────────────────────────────────────────────────
+# Compose invokes: "compose [--project-name X] <subcmd> [--opt[=val]|--opt val]... [service]"
+# Flags and the subcommand can appear in any order between "compose" and the end.
+
+[[ "${1:-}" == "compose" ]] || die "expected 'compose' as first arg, got: ${1:-<none>}"
+shift
+
+cmd=""
+project=""
+port="8085"
+shell_cmd="zsh"
+max_clients="4"
+service=""
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --project-name)   project="${2:-}"; shift 2 ;;
+    --project-name=*) project="${1#*=}"; shift ;;
+    --port)           port="${2:-}"; shift 2 ;;
+    --port=*)         port="${1#*=}"; shift ;;
+    --shell)          shell_cmd="${2:-}"; shift 2 ;;
+    --shell=*)        shell_cmd="${1#*=}"; shift ;;
+    --max-clients)    max_clients="${2:-}"; shift 2 ;;
+    --max-clients=*)  max_clients="${1#*=}"; shift ;;
+    --*=*)            shift ;;                           # unknown --key=val: ignore
+    --*)              shift; [[ $# -gt 0 ]] && shift ;;  # unknown --key val: ignore
+    up|down|metadata) cmd="$1"; shift ;;
+    *)                service="$1"; shift ;;
+  esac
+done
+
+[[ -n "$cmd" ]] || die "missing subcommand (up|down|metadata)"
+
+state_dir="${TMPDIR:-/tmp}/labspace-sbx-ttyd"
+mkdir -p "$state_dir"
+# One ttyd per (project,service) pair — lets multiple providers coexist.
+slug="${project:-default}-${service:-workspace}"
+pidfile="$state_dir/${slug}.pid"
+logfile="$state_dir/${slug}.log"
+
+# ── Subcommands ───────────────────────────────────────────────────────────────
+
+cmd_up() {
+  command -v ttyd >/dev/null 2>&1 || die "ttyd not on PATH. Install: 'brew install ttyd' (macOS) or 'sudo apt install ttyd' (Linux)."
+  command -v sbx  >/dev/null 2>&1 || die "sbx not on PATH. Install: 'brew install docker/tap/sbx' (macOS), see https://docs.docker.com/go/sbx/"
+
+  if ! sbx version 2>/dev/null | grep -q "Server Version"; then
+    emit info "starting sbx daemon"
+    sbx start >/dev/null 2>&1 || die "failed to start sbx daemon"
+  fi
+
+  if [[ -f "$pidfile" ]] && kill -0 "$(cat "$pidfile")" 2>/dev/null; then
+    emit info "ttyd already running on :$port (pid $(cat "$pidfile"))"
+  else
+    rm -f "$pidfile"
+    if command -v lsof >/dev/null 2>&1 && lsof -ti "tcp:$port" >/dev/null 2>&1; then
+      die "port $port is in use by another process. Free it and retry."
+    fi
+
+    emit info "starting ttyd on :$port (cmd: $shell_cmd)"
+    # Daemonize ttyd so Compose doesn't reap it with the provider. setsid is
+    # Linux-only; on macOS we fall back to nohup + disown, which is sufficient
+    # because nohup makes ttyd ignore SIGHUP when its parent (this script) exits.
+    if command -v setsid >/dev/null 2>&1; then
+      setsid nohup ttyd \
+        -p "$port" --writable --max-clients "$max_clients" \
+        sh -c "$shell_cmd" \
+        >"$logfile" 2>&1 </dev/null &
+    else
+      nohup ttyd \
+        -p "$port" --writable --max-clients "$max_clients" \
+        sh -c "$shell_cmd" \
+        >"$logfile" 2>&1 </dev/null &
+    fi
+    ttyd_pid=$!
+    disown "$ttyd_pid" 2>/dev/null || true
+    echo "$ttyd_pid" > "$pidfile"
+
+    sleep 0.5
+    if ! kill -0 "$ttyd_pid" 2>/dev/null; then
+      rm -f "$pidfile"
+      die "ttyd failed to start; last lines from $logfile: $(tail -n 5 "$logfile" 2>/dev/null || echo '<no log>')"
+    fi
+    emit info "ttyd started (pid $ttyd_pid)"
+  fi
+
+  emit setenv "URL=http://localhost:${port}"
+}
+
+cmd_down() {
+  if [[ -f "$pidfile" ]]; then
+    pid="$(cat "$pidfile")"
+    if kill -0 "$pid" 2>/dev/null; then
+      kill "$pid" 2>/dev/null || true
+      emit info "ttyd (pid $pid) stopped"
+    fi
+    rm -f "$pidfile"
+  else
+    emit debug "no ttyd pidfile at $pidfile, nothing to stop"
+  fi
+}
+
+cmd_metadata() {
+  cat <<'JSON'
+{"description":"Host ttyd wrapping a host shell, for Docker Sandboxes (sbx) labspaces.","up":{"parameters":[{"name":"port","type":"integer","required":false,"default":8085,"description":"Host port for ttyd HTTP server"},{"name":"shell","type":"string","required":false,"default":"zsh","description":"Command ttyd wraps (passed to sh -c)"},{"name":"max-clients","type":"integer","required":false,"default":4,"description":"ttyd --max-clients value"}]},"down":{"parameters":[]}}
+JSON
+}
+
+case "$cmd" in
+  up)       cmd_up ;;
+  down)     cmd_down ;;
+  metadata) cmd_metadata ;;
+  *)        die "unknown subcommand: $cmd" ;;
+esac
