@@ -1,14 +1,16 @@
 metadata:
-  id: ajeetraina/labspace-sbx
-  sourceRepo: github.com/ajeetraina/labspace-sbx
+  id: shelajev/labspace-sbx
+  sourceRepo: github.com/shelajev/labspace-sbx
   contentVersion: abcd123
 
-title: Running AI Agents Safely with Docker Sandboxes
+title: Docker Sandboxes — Three Agent Demos
 description: |
-  Learn how to run AI coding agents in isolated microVM sandboxes using Docker sbx.
-  Go hands-on with structural isolation, credential proxy injection, network policy
-  enforcement, branch mode, and parallel agent execution. Prove the security
-  guarantees yourself with real commands against real file paths.
+  Three hands-on scenarios that show what Docker Sandboxes bring to real
+  AI-agent workflows. You'll run Claude Code in an isolated microVM, drive
+  OpenCode + NVIDIA NIM from VS Code over the Agent Client Protocol, and
+  run a Telegram bot that spawns Claude agents inside Docker-in-Docker —
+  all from the same sbx substrate, with proxy-injected secrets and
+  default-deny networking.
 
 services:
   - title: Host
@@ -25,25 +27,15 @@ services:
     icon: code
 
 sections:
-  - title: Pre-flight Checklist
-    contentPath: 00-preflight.md
-  - title: Why Agents Need Governance
-    contentPath: 01-why-governance.md
-  - title: Your First Sandbox
-    contentPath: 02-first-sandbox.md
-  - title: "The Isolation Proof \U0001F525"
-    contentPath: 03-isolation-proof.md
-  - title: "Reviewing Agent Changes"
-    contentPath: 03b-reviewing-agent-changes.md
-  - title: Secrets Without Exposure
-    contentPath: 04-secrets.md
-  - title: Network Policy
-    contentPath: 05-network-policy.md
-  - title: Branch Mode
-    contentPath: 06-branch-mode.md
-  - title: Parallel Agents
-    contentPath: 07-parallel-agents.md
-  - title: Running Open-Source Models Inside sbx
-    contentPath: 08-local-models.md
-  - title: AI Governance at Scale
-    contentPath: 09-governance-summary.md
+  - title: Introduction
+    contentPath: 01-introduction.md
+  - title: Pre-flight
+    contentPath: 02-preflight.md
+  - title: "Scenario 1 — Claude in an Isolated Sandbox"
+    contentPath: 03-claude-isolated.md
+  - title: "Scenario 2 — OpenCode + NVIDIA NIM via ACP"
+    contentPath: 04-opencode-nvidia.md
+  - title: "Scenario 3 — NanoClaw on Telegram"
+    contentPath: 05-nanoclaw-telegram.md
+  - title: Wrap-up
+    contentPath: 06-summary.md
