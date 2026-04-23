@@ -44,19 +44,17 @@ Scenarios 1 and 3 use Claude. The key is stored in your **OS keychain** via
 `sbx secret set` — it never lives in an env var the sandbox can read, and it
 never gets written to a file.
 
-```bash
-echo "$ANTHROPIC_API_KEY" | sbx secret set -g anthropic
-```
-
-If `$ANTHROPIC_API_KEY` isn't set in your host shell yet, set it first from
-the same tab:
+The **Host** tab *is* a terminal on your host machine, so anything you run
+there touches your real OS keychain. Paste your key into this command and
+run it:
 
 ```bash
-read -s -p "ANTHROPIC_API_KEY: " ANTHROPIC_API_KEY && export ANTHROPIC_API_KEY
-echo "$ANTHROPIC_API_KEY" | sbx secret set -g anthropic
+echo 'sk-ant-...' | sbx secret set -g anthropic
 ```
 
-(Hit Enter after pasting the key; `-s` keeps it off the screen.)
+(Replace `sk-ant-...` with your real key. The quotes keep special characters
+safe. Because the key is inline it'll show in your shell history — clear
+it afterward with `history -d -1` if you care.)
 
 Verify:
 
