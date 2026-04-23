@@ -19,6 +19,10 @@ services:
     id: claude
     url: http://localhost:8086
     icon: terminal
+  - title: VS Code
+    id: vscode
+    url: http://localhost:8080
+    icon: code
 
 sections:
   - title: Pre-flight Checklist

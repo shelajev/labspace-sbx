@@ -3,17 +3,17 @@ services:
     environment:
       PROJECT_CLONE_URL: https://github.com/shelajev/labspace-sbx
 
-  # Dummy workspace container. The base (labspace-content-dev) wires `workspace`
-  # into other services (e.g. host-republisher uses `network_mode: service:workspace`),
-  # so we can't replace it with a provider outright. We clear its ports so the
-  # host-side ttyd can bind 8085, and point its own internal ttyd at 8086 (unused).
+  # Placeholder workspace container. The base (labspace-content-dev) wires
+  # `workspace` into other services (e.g. host-republisher uses
+  # `network_mode: service:workspace`), so it has to exist as a running
+  # container — but the learner never interacts with it directly. We use the
+  # canonical multi-arch base image (same one tc-go uses) and clear its ports
+  # so the host-side ttyd can own :8085. Host and Claude tabs run on the host
+  # via the sbx-ttyd provider; VS Code runs in workspace-vscode below.
   workspace:
-    image: ajeetraina777/labspace-workspace-ttyd:latest
+    image: dockersamples/labspace-workspace-base
     pull_policy: always
-    command: ttyd --writable bash
     ports: !override []
-    environment:
-      PORT: "8086"
 
   # Host-side ttyd wrapping a host zsh, on port 8085. This is what the iframe
   # actually loads — learners need a host shell to run sbx commands against
@@ -38,6 +38,20 @@ services:
         shell: sbx run claude .
         max-clients: 1
 
+  # Containerized VS Code (code-server) for the OpenCode+ACP scenario. Uses the
+  # stock labspace-workspace-base image — same one tc-go-labspace extends — so
+  # learners get a real VS Code with the labspace project/ mounted. Exposed on
+  # :8080 and rendered as its own tab via labspace.yaml.
+  workspace-vscode:
+    image: dockersamples/labspace-workspace-base
+    pull_policy: always
+    environment:
+      PORT: "8080"
+    ports:
+      - "8080:8080"
+    volumes:
+      - labspace-content:/home/coder/project
+
   interface:
     image: ajeetraina777/labspace-interface-sbx:latest
     pull_policy: always
@@ -46,3 +60,4 @@ services:
     depends_on:
       - host-terminal
       - host-terminal-claude
+      - workspace-vscode
